@@ -74,13 +74,13 @@ class ExternalEditor(QObject):
             except OSError as e:
                 # NOTE: Do not replace this with "raise CommandError" as it's
                 # executed async.
-                message.error("Failed to delete tempfile... ({})".format(e))
+                message.error("Failed to delete tempfile: {}".format(e))
         else:
             message.info(f"Keeping file {self._filename} as the editor process exited "
                          "abnormally")
 
     @pyqtSlot(int, QProcess.ExitStatus)
-    def _on_proc_closed(self, _exitcode, exitstatus):
+    def _on_proc_closed(self, exitcode, exitstatus):
         """Write the editor text into the form field and clean up tempfile.
 
         Callback for QProcess when the editor was closed.
@@ -89,10 +89,13 @@ class ExternalEditor(QObject):
             log.procs.debug("Ignoring _on_proc_closed for deleted editor")
             return
 
-        log.procs.debug("Editor closed")
-        if exitstatus != QProcess.ExitStatus.NormalExit:
-            # No error/cleanup here, since we already handle this in
-            # on_proc_error.
+        log.procs.debug("Editor closed; exitcode: {}; exitstatus: {}".format(
+            exitcode, exitstatus))
+        if exitstatus != QProcess.ExitStatus.NormalExit or exitcode != 0:
+            # guiprocess already gives a "Editor exited with status X", so we
+            # don't need to repeat that here.
+            message.error("The file is still available at {}".format(
+                              self._filename))
             return
 
         # do a final read to make sure we don't miss the last signal
@@ -100,10 +103,6 @@ class ExternalEditor(QObject):
         self._on_file_changed(self._filename)
         self.editing_finished.emit()
         self._cleanup(successful=self._proc.outcome.was_successful())
-
-    @pyqtSlot(QProcess.ProcessError)
-    def _on_proc_error(self, _err):
-        self._cleanup(successful=False)
 
     def edit(self, text, caret_position=None):
         """Edit a given text.
@@ -154,10 +153,12 @@ class ExternalEditor(QObject):
         try:
             with open(path, 'r', encoding=config.val.editor.encoding) as f:
                 text = f.read()
-        except OSError as e:
+        except (OSError, UnicodeError) as e:
             # NOTE: Do not replace this with "raise CommandError" as it's
             # executed async.
-            message.error("Failed to read back edited file: {}".format(e))
+            message.error("Failed to read back edited file: {}\n"
+                          "The file is still available at {}".format(
+                              e, self._filename))
             return
         log.procs.debug("Read back: {}".format(text))
         if self._content != text:
@@ -182,7 +183,6 @@ class ExternalEditor(QObject):
         """
         self._proc = guiprocess.GUIProcess(what='editor', parent=self)
         self._proc.finished.connect(self._on_proc_closed)
-        self._proc.error.connect(self._on_proc_error)
         editor = config.val.editor.command
         executable = editor[0]
 
