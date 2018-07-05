@@ -211,8 +211,9 @@ class SessionManager(QObject):
             data['history'].append(item_data)
 
         # check active
-        if data['history'] and not any(i.get('active') for i in data['history']):
-            log.session.warning('no active item for', tab)
+        if (data['history'] and not
+                any(i.get('active') for i in data['history'])):
+            log.sessions.warning('no active item for {}'.format(tab))
             data['history'][-1]['active'] = True
 
         return data
@@ -248,7 +249,9 @@ class SessionManager(QObject):
                 win_data['private'] = True
 
             for i, tab in enumerate(tabbed_browser.widgets()):
-                log.sessions.debug("saving tab {} with history {}...".format(tab, list(tab.history)))
+                log.sessions.debug(
+                    "saving tab {} with history {}...".format(
+                        tab, list(tab.history)))
                 active = i == tabbed_browser.widget.currentIndex()
                 win_data['tabs'].append(self._save_tab(tab, active))
             data['windows'].append(win_data)
@@ -376,16 +379,21 @@ class SessionManager(QObject):
                     histentry['original-url'].encode('ascii'))
             else:
                 orig_url = url
-            entry = browsertab.TabHistoryItem(url=url, original_url=orig_url,
-                                   title=histentry['title'], active=active,
-                                   user_data=user_data)
-            entries.append(entry)
+
+            entry = browsertab.TabHistoryItem(
+                url=url,
+                original_url=orig_url,
+                title=histentry['title'],
+                active=active,
+                user_data=user_data)
+            history_items.append(entry)
+
             if active:
                 new_tab.title_changed.emit(histentry['title'])
 
         try:
             new_tab.loaded = False
-            new_tab.load_history_items(entries)
+            new_tab.load_history_items(history_items)
         except ValueError as e:
             raise SessionError(e)
 
@@ -445,8 +453,7 @@ class SessionManager(QObject):
         for win in data['windows']:
             self._load_window(win)
 
-        if data['windows']:
-            self.did_load = True
+        self.did_load = bool(data['windows'])
         if not name.startswith('_') and not temp:
             self._current = name
 
