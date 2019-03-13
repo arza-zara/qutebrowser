@@ -241,16 +241,16 @@ class CrashHandler(QObject):
         is_crashing = True
 
         self._app.closeAllWindows()
-        if self._args.no_err_windows:
-            crashdialog.dump_exception_info(exc, info.pages, info.cmd_history,
-                                            info.objects)
-        else:
-            self._crash_dialog = crashdialog.ExceptionCrashDialog(
-                self._args.debug, info.pages, info.cmd_history, exc,
-                info.objects)
-            ret = self._crash_dialog.exec_()
-            if ret == crashdialog.Result.restore:
-                self._quitter.restart(info.pages)
+        #if self._args.no_err_windows:
+        #    crashdialog.dump_exception_info(exc, info.pages, info.cmd_history,
+        #                                    info.objects)
+        #else:
+        #    self._crash_dialog = crashdialog.ExceptionCrashDialog(
+        #        self._args.debug, info.pages, info.cmd_history, exc,
+        #        info.objects)
+        #    ret = self._crash_dialog.exec_()
+        #    if ret == crashdialog.Result.restore:
+        #        self._quitter.restart(info.pages)
 
         # We might risk a segfault here, but that's better than continuing to
         # run in some undefined state, so we only do the most needed shutdown
