@@ -638,7 +638,7 @@ class HintManager(QObject):
     @cmdutils.register(instance='hintmanager', scope='tab', name='hint',
                        star_args_optional=True, maxsplit=2)
     def start(self,  # pylint: disable=keyword-arg-before-vararg
-              group='all', target=Target.normal, *args, mode=None,
+              groups='all', target=Target.normal, *args, mode=None,
               add_history=False, rapid=False, first=False):
         """Start hinting.
 
@@ -651,7 +651,7 @@ class HintManager(QObject):
             add_history: Whether to add the spawned or yanked link to the
                          browsing history.
             first: Click the first hinted element without prompting.
-            group: The element types to hint.
+            groups: The element types to hint (comma-separated list).
 
                 - `all`: All clickable elements.
                 - `links`: Only links.
@@ -741,16 +741,21 @@ class HintManager(QObject):
         except qtutils.QtValueError:
             raise cmdutils.CommandError("No URL set for this page yet!")
         self._context.args = list(args)
-        self._context.group = group
+        self._context.groups = groups
 
-        try:
-            selector = webelem.css_selector(self._context.group,
-                                            self._context.baseurl)
-        except webelem.Error as e:
-            raise cmdutils.CommandError(str(e))
+        css_selectors = []
+        special_selectors = []
+        for group in self._context.groups.split(","):
+            try:
+                css_selector, special_selector = webelem.css_selector(
+                    self._context.groups, self._context.baseurl)
+            except webelem.Error as e:
+                raise cmdutils.CommandError(str(e))
+            css_selectors.append(css_selector)
+            special_selectors.append(special_selector)
 
         self._context.tab.elements.find_css(
-            selector,
+            css_selectors,
             callback=self._start_cb,
             error_cb=lambda err: message.error(str(err)),
             only_visible=True)
