@@ -50,6 +50,8 @@ if MYPY:
     from qutebrowser.browser import webelem
     from qutebrowser.browser.inspector import AbstractWebInspector
 
+from qutebrowser.mainwindow.treetabwidget import TreeTabWidget
+from qutebrowser.misc.notree import Node
 
 tab_id_gen = itertools.count(0)
 
@@ -891,6 +893,11 @@ class AbstractTab(QWidget):
         self.pending_removal = False
         self.shutting_down.connect(functools.partial(
             setattr, self, 'pending_removal', True))
+
+        if parent and isinstance(parent, TreeTabWidget):
+            self.node = Node(self, parent=parent.tree_root)
+        else:
+            self.node = Node(self, parent=None)
 
         # FIXME:qtwebengine  Should this be public api via self.hints?
         #                    Also, should we get it out of objreg?
