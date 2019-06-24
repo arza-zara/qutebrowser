@@ -37,7 +37,6 @@ from qutebrowser.browser import browsertab
 
 
 class TabWidget(QTabWidget):
-
     """The tab widget used for TabbedBrowser.
 
     Signals:
@@ -60,8 +59,7 @@ class TabWidget(QTabWidget):
         self.setStyle(TabBarStyle())
         self.setTabBar(bar)
         bar.tabCloseRequested.connect(self.tabCloseRequested)
-        bar.tabMoved.connect(functools.partial(
-            QTimer.singleShot, 0, self.update_tab_titles))
+        bar.tabMoved.connect(self.update_tab_titles)
         bar.currentChanged.connect(self._on_current_changed)
         bar.new_tab_requested.connect(self._on_new_tab_requested)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -69,6 +67,7 @@ class TabWidget(QTabWidget):
         self.setElideMode(Qt.ElideRight)
         self.setUsesScrollButtons(True)
         bar.setDrawBase(False)
+
         self._init_config()
         config.instance.changed.connect(self._init_config)
 
@@ -170,6 +169,9 @@ class TabWidget(QTabWidget):
         fields['perc_raw'] = tab.progress()
         fields['backend'] = objects.backend.name
         fields['private'] = ' [Private Mode] ' if tab.is_private else ''
+        fields['tree'] = ''
+        fields['collapsed'] = ''
+
         try:
             if tab.audio.is_muted():
                 fields['audio'] = TabWidget.MUTE_STRING

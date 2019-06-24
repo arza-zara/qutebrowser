@@ -8,3 +8,5 @@ MarkupSafe==1.1.1
 Pygments==2.4.0
 pyPEG2==2.15.2
 PyYAML==5.1
+# FIXME: only for debugging - remove before releasing
+ipdb
