@@ -568,23 +568,24 @@ class HintManager(QObject):
                 raise cmdutils.CommandError(
                     "'args' is only allowed with target userscript/spawn.")
 
-    def _filter_matches(self, filterstr, elemstr):
-        """Return True if `filterstr` matches `elemstr`."""
+    def _filter_matches(self, filterstr: str, elem):
+        """Return True if `filterstr` matches `elem`.
+
+        Using the values in the extended_filter_attrs configuration setting."""
         # Empty string and None always match
         if not filterstr:
             return True
         filterstr = filterstr.casefold()
-        elemstr = elemstr.casefold()
-        # Do multi-word matching
-        return all(word in elemstr for word in filterstr.split())
+        _attrs = config.cache['hints.extended_filter_attrs']
+        return elem.matches_hint_filter(filterstr, _attrs)
 
-    def _filter_matches_exactly(self, filterstr, elemstr):
-        """Return True if `filterstr` exactly matches `elemstr`."""
+    def _filter_matches_exactly(self, filterstr: str, elem):
+        """Return True if `filterstr` exactly matches `elem`."""
         # Empty string and None never match
         if not filterstr:
             return False
         filterstr = filterstr.casefold()
-        elemstr = elemstr.casefold()
+        elemstr = str(elem).casefold()
         return filterstr == elemstr
 
     def _start_cb(self, elems):
@@ -791,8 +792,8 @@ class HintManager(QObject):
         elif auto_follow == "unique-match":
             follow = keystr or filterstr
         elif auto_follow == "full-match":
-            elemstr = str(list(visible.values())[0].elem)
-            filter_match = self._filter_matches_exactly(filterstr, elemstr)
+            elem = list(visible.values())[0].elem
+            filter_match = self._filter_matches_exactly(filterstr, elem)
             follow = (keystr in visible) or filter_match
         else:
             follow = False
@@ -854,7 +855,7 @@ class HintManager(QObject):
         visible = []
         for label in self._context.all_labels:
             try:
-                if self._filter_matches(filterstr, str(label.elem)):
+                if self._filter_matches(filterstr, label.elem):
                     visible.append(label)
                     # Show label again if it was hidden before
                     label.show()
