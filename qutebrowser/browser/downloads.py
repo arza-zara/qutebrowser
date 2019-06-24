@@ -452,6 +452,9 @@ class AbstractDownloadItem(QObject):
         self._filename = None
         self._dead = False
 
+    def get_filename(self):
+        return self._filename
+
     def __repr__(self):
         return utils.get_repr(self, basename=self.basename)
 
@@ -631,7 +634,7 @@ class AbstractDownloadItem(QObject):
         """Finish initialization based on self._filename."""
         raise NotImplementedError
 
-    def _ask_confirm_question(self, title, msg):
+    def _ask_confirm_question(self, title, msg, custom_yes_action=None):
         """Ask a confirmation question for the download."""
         raise NotImplementedError
 
@@ -725,7 +728,14 @@ class AbstractDownloadItem(QObject):
             last_used_directory = os.path.dirname(self._filename)
 
         log.downloads.debug("Setting filename to {}".format(self._filename))
-        if force_overwrite:
+        conflicting_downloads = self._get_conflicting_downloads()
+        if conflicting_downloads:
+            txt = ("<b>{}</b> is already downloading. Cancel and "
+                   "re-download?".format(html.escape(self._filename)))
+            self._ask_confirm_question(
+                "Cancel other download(s)?", txt,
+                custom_yes_action=self._cancel_conflicting_downloads)
+        elif force_overwrite:
             self._after_set_filename()
         elif os.path.isfile(self._filename):
             # The file already exists, so ask the user if it should be
@@ -741,6 +751,22 @@ class AbstractDownloadItem(QObject):
             self._ask_confirm_question("Overwrite special file?", txt)
         else:
             self._after_set_filename()
+
+    def _get_conflicting_downloads(self):
+        """Returns a list of other active downloads with the same name."""
+        return [
+            download for download in
+            objreg.get('download-model', scope='window', window='current')
+            if download is not self and
+            download.get_filename() == self._filename and
+            not download.done
+        ]
+
+    def _cancel_conflicting_downloads(self):
+        """Cancel conflicting downloads and call _after_set_filename."""
+        for download in self._get_conflicting_downloads():
+            download.cancel(remove_data=False)
+        self._after_set_filename()
 
     def _open_if_successful(self, cmdline):
         """Open the downloaded file, but only if it was successful.
