@@ -170,6 +170,7 @@ def init(args, crash_handler):
 
     loader.init()
     loader.load_components()
+    loader.load_extensions()
     try:
         _init_modules(args, crash_handler)
     except (OSError, UnicodeDecodeError, browsertab.WebTabError) as e:
