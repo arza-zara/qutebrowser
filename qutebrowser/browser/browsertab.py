@@ -618,7 +618,7 @@ class AbstractHistoryPrivate:
         raise NotImplementedError
 
 
-class TabHistoryItem:
+class AbstractHistoryItem:
 
     """A single item in the tab history.
 
@@ -648,24 +648,7 @@ class TabHistoryItem:
 
     @classmethod
     def from_qt(cls, qt_item, active=False):
-        """Construct a TabHistoryItem from a Qt history item.
-
-        Args:
-            qt_item: a QWebEngineHistoryItem or QWebKitHistoryItem
-        """
-        qtutils.ensure_valid(qt_item)
-
-        try:
-            user_data = qt_item.userData()
-        except AttributeError:
-            user_data = None
-
-        return TabHistoryItem(
-            qt_item.url(),
-            qt_item.title(),
-            original_url=qt_item.originalUrl(),
-            active=active,
-            user_data=user_data)
+        raise NotImplementedError
 
 
 class AbstractHistory:
@@ -734,10 +717,10 @@ class AbstractHistory:
         self.load_on_focus = False
 
     def load_items(self, entries, lazy=True):
-        """Add a list of TabHistoryItems to the tab's history.
+        """Add a list of AbstractHistoryItems to the tab's history.
 
         Args:
-            entries: a list of TabHistoryItems
+            entries: a list of AbstractHistoryItem
             lazy: indicate if lazy history load
         """
         if lazy:
@@ -750,7 +733,7 @@ class AbstractHistory:
         self.to_load = []
         current_idx = self.current_idx()
         for idx, item in enumerate(self):
-            item = TabHistoryItem.from_qt(
+            item = self._tab.history_item_from_qt(
                 item, active=idx == current_idx)
             self.to_load.append(item)
 
@@ -1251,6 +1234,12 @@ class AbstractTab(QWidget):
         raise NotImplementedError
 
     def set_html(self, html: str, base_url: QUrl = QUrl()) -> None:
+        raise NotImplementedError
+
+    def history_item_from_qt(self, item):
+        raise NotImplementedError
+
+    def new_history_item(self, item):
         raise NotImplementedError
 
     def __repr__(self) -> str:
