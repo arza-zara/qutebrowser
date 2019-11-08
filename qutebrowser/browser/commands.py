@@ -2044,3 +2044,31 @@ class CommandDispatcher:
                     new_url = self._parse_url(
                         "qute://back/#" + cur_tab.title())
                     cur_tab.load_url(new_url)
+
+    @cmdutils.register(instance='command-dispatcher', scope='window')
+    @cmdutils.argument('count', value=cmdutils.Value.count)
+    def tab_load(self, count=None):
+        """Load the current tab.
+
+        Args:
+            count: The tab index to load, or None
+        """
+        tab = self._cntwidget(count)
+        if tab is None:
+            return
+
+        tab.history.load()
+
+    @cmdutils.register(instance='command-dispatcher', scope='window')
+    @cmdutils.argument('count', value=cmdutils.Value.count)
+    def tab_unload(self, count=None):
+        """Unload the current tab.
+
+        Args:
+            count: The tab index to load, or None
+        """
+        tab = self._cntwidget(count)
+        if tab is None:
+            return
+
+        tab.unload()

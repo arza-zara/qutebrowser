@@ -31,6 +31,9 @@ from PyQt5.QtNetwork import QAuthenticator
 from PyQt5.QtWidgets import QApplication, QWidget
 from PyQt5.QtWebEngineWidgets import QWebEnginePage, QWebEngineScript
 
+if typing.TYPE_CHECKING:
+    from PyQt5.QtWebEngineWidgets import QWebEngineHistoryItem
+
 from qutebrowser.config import configdata, config
 from qutebrowser.browser import browsertab, eventfilter, shared, webelem
 from qutebrowser.browser.webengine import (webview, webengineelem, tabhistory,
@@ -538,6 +541,26 @@ class WebEngineScroller(browsertab.AbstractScroller):
         return self._at_bottom
 
 
+class WebEngineHistoryItem(browsertab.AbstractHistoryItem):
+    """History item data derived from QWebEngineHistoryItem."""
+
+    @classmethod
+    def from_qt(cls, qt_item, active=False):
+        """Construct a WebEngineHistoryItem from a Qt history item.
+
+        Args:
+            qt_item: a QWebEngineHistoryItem
+        """
+        qtutils.ensure_valid(qt_item)
+
+        return cls(
+            qt_item.url(),
+            qt_item.title(),
+            original_url=qt_item.originalUrl(),
+            active=active,
+            user_data=None)
+
+
 class WebEngineHistoryPrivate(browsertab.AbstractHistoryPrivate):
 
     """History-related methods which are not part of the extension API."""
@@ -552,6 +575,12 @@ class WebEngineHistoryPrivate(browsertab.AbstractHistoryPrivate):
             scheme = self._tab.url().scheme()
             if scheme in ['view-source', 'chrome']:
                 raise browsertab.WebTabError("Can't serialize special URL!")
+
+        if self._tab.history.to_load:
+            _stream, data, _cur_data = tabhistory.serialize(
+                self._tab.history.to_load
+            )
+            return data
         return qtutils.serialize(self._history)
 
     def deserialize(self, data):
@@ -584,28 +613,6 @@ class WebEngineHistory(browsertab.AbstractHistory):
     def __init__(self, tab):
         super().__init__(tab)
         self.private_api = WebEngineHistoryPrivate(tab)
-
-    def __len__(self):
-        return len(self._history)
-
-    def __iter__(self):
-        return iter(self._history.items())
-
-    def current_idx(self):
-        return self._history.currentItemIndex()
-
-    def can_go_back(self):
-        return self._history.canGoBack()
-
-    def can_go_forward(self):
-        return self._history.canGoForward()
-
-    def _item_at(self, i):
-        return self._history.itemAt(i)
-
-    def _go_to_item(self, item):
-        self._tab.before_load_started.emit(item.url())
-        self._history.goToItem(item)
 
 
 class WebEngineZoom(browsertab.AbstractZoom):
@@ -1185,6 +1192,10 @@ class WebEngineTab(browsertab.AbstractTab):
         self._widget.load(url)
 
     def url(self, *, requested=False):
+        if not self.history.loaded and self.history.to_load:
+            idx = self.history.current_idx()
+            return self.history.to_load[idx].url
+
         page = self._widget.page()
         if requested:
             return page.requestedUrl()
@@ -1216,6 +1227,10 @@ class WebEngineTab(browsertab.AbstractTab):
             self._widget.page().runJavaScript(code, world_id, callback)
 
     def reload(self, *, force=False):
+        if not self.history.loaded:
+            self.load()
+            return
+
         if force:
             action = QWebEnginePage.ReloadAndBypassCache
         else:
@@ -1248,6 +1263,19 @@ class WebEngineTab(browsertab.AbstractTab):
             title="Error loading page: {}".format(url_string),
             url=url_string, error=error)
         self.set_html(error_page)
+
+    def history_item_from_qt(self, item: browsertab.TypeHistoryItem,
+                             active: bool = False) -> WebEngineHistoryItem:
+        return WebEngineHistoryItem.from_qt(item, active)
+
+    def new_history_item(self, url, original_url, title, active, user_data):
+        return WebEngineHistoryItem(
+            url=url,
+            original_url=original_url,
+            title=title,
+            active=active,
+            user_data=user_data
+        )
 
     @pyqtSlot()
     def _on_history_trigger(self):

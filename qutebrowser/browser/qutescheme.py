@@ -29,7 +29,6 @@ import json
 import os
 import time
 import textwrap
-import urllib
 import collections
 import base64
 import typing
@@ -465,18 +464,6 @@ def qute_bindings(_url):
 
     src = jinja.render('bindings.html', title='Bindings',
                        bindings=bindings)
-    return 'text/html', src
-
-
-@add_handler('back')
-def qute_back(url):
-    """Handler for qute://back.
-
-    Simple page to free ram / lazy load a site, goes back on focusing the tab.
-    """
-    src = jinja.render(
-        'back.html',
-        title='Suspended: ' + urllib.parse.unquote(url.fragment()))
     return 'text/html', src
 
 

@@ -33,8 +33,9 @@ from PyQt5.QtPrintSupport import QPrintDialog, QPrinter
 from PyQt5.QtNetwork import QNetworkAccessManager
 
 if typing.TYPE_CHECKING:
-    from PyQt5.QtWebKit import QWebHistory
-    from PyQt5.QtWebEngineWidgets import QWebEngineHistory
+    from PyQt5.QtWebKit import QWebHistory, QWebHistoryItem
+    from PyQt5.QtWebEngineWidgets import (QWebEngineHistory,
+                                          QWebEngineHistoryItem)
 
 import pygments
 import pygments.lexers
@@ -43,7 +44,7 @@ import pygments.formatters
 from qutebrowser.keyinput import modeman
 from qutebrowser.config import config
 from qutebrowser.utils import (utils, objreg, usertypes, log, qtutils,
-                               urlutils, message)
+                               urlutils, message, jinja)
 from qutebrowser.misc import miscwidgets, objects, sessions
 from qutebrowser.browser import eventfilter
 from qutebrowser.qt import sip
@@ -56,6 +57,9 @@ from qutebrowser.mainwindow.treetabwidget import TreeTabWidget
 from qutebrowser.misc.notree import Node
 
 tab_id_gen = itertools.count(0)
+
+TypeHistoryItem = typing.Union['QWebEngineHistoryItem',
+                               'QWebHistoryItem']
 
 
 def create(win_id: int,
@@ -620,6 +624,42 @@ class AbstractHistoryPrivate:
         raise NotImplementedError
 
 
+class AbstractHistoryItem:
+
+    """A single item in the tab history.
+
+    Attributes:
+        url: The QUrl of this item.
+        original_url: The QUrl of this item which was originally requested.
+        title: The title as string of this item.
+        active: Whether this item is the item currently navigated to.
+        user_data: The user data for this item.
+    """
+
+    def __init__(self, url: QUrl, title: str, *, original_url: QUrl = None,
+                 active: bool = False,
+                 user_data: typing.Dict[str, typing.Any] = None) -> None:
+        self.url = url
+        if original_url is None:
+            self.original_url = url
+        else:
+            self.original_url = original_url
+        self.title = title
+        self.active = active
+        self.user_data = user_data
+
+    def __repr__(self) -> str:
+        return utils.get_repr(self, constructor=True, url=self.url,
+                              original_url=self.original_url, title=self.title,
+                              active=self.active, user_data=self.user_data)
+
+    @classmethod
+    def from_qt(cls, qt_item: TypeHistoryItem,
+                active: bool = False) -> 'AbstractHistoryItem':
+        """Convert `TypeHistoryItem` to `AbstractHistoryItem`."""
+        raise NotImplementedError
+
+
 class AbstractHistory:
 
     """The history attribute of a AbstractTab."""
@@ -630,11 +670,28 @@ class AbstractHistory:
             typing.Union['QWebHistory', 'QWebEngineHistory'], None)
         self.private_api = AbstractHistoryPrivate(tab)
 
-    def __len__(self) -> int:
-        raise NotImplementedError
+        # Lazy loading properties
+        self.to_load = []  # type: typing.List[AbstractHistoryItem]
+        self.load_on_focus = True
+        self.loaded = False
 
-    def __iter__(self) -> typing.Iterable:
-        raise NotImplementedError
+    def __len__(self) -> int:
+        if self.to_load:
+            return len(self.to_load)
+
+        return len(self._history)
+
+    def __iter__(self) -> typing.Iterator:
+        if self.to_load:
+            return iter(self.to_load)
+
+        return iter([
+            self._tab.history_item_from_qt(
+                item,
+                active=idx == self.current_idx()
+            )
+            for idx, item in enumerate(self._history.items())
+        ])
 
     def _check_count(self, count: int) -> None:
         """Check whether the count is positive."""
@@ -642,10 +699,20 @@ class AbstractHistory:
             raise WebTabError("count needs to be positive!")
 
     def current_idx(self) -> int:
-        raise NotImplementedError
+        """Return the currently active tab index."""
+        if self.to_load:
+            for i, item in enumerate(self.to_load):
+                if item.active:
+                    return i
+            return len(self.to_load) - 1
+
+        return self._history.currentItemIndex()
 
     def back(self, count: int = 1) -> None:
         """Go back in the tab's history."""
+        if not self.loaded:
+            self.load()
+
         self._check_count(count)
         idx = self.current_idx() - count
         if idx >= 0:
@@ -656,6 +723,9 @@ class AbstractHistory:
 
     def forward(self, count: int = 1) -> None:
         """Go forward in the tab's history."""
+        if not self.loaded:
+            self.load()
+
         self._check_count(count)
         idx = self.current_idx() + count
         if idx < len(self):
@@ -665,16 +735,58 @@ class AbstractHistory:
             raise WebTabError("At end of history.")
 
     def can_go_back(self) -> bool:
-        raise NotImplementedError
+        """Determine whether tab can be navigated back."""
+        if self.to_load:
+            return self.current_idx() > 0
+        return self._history.canGoBack()
 
     def can_go_forward(self) -> bool:
-        raise NotImplementedError
+        """Determine whether tab can be navigated forward."""
+        if self.loaded:
+            return self._history.canGoForward()
 
-    def _item_at(self, i: int) -> typing.Any:
-        raise NotImplementedError
+        return self.current_idx() < len(self.to_load)
 
-    def _go_to_item(self, item: typing.Any) -> None:
-        raise NotImplementedError
+    def load(self) -> None:
+        """Load the tab history."""
+        if self.loaded:
+            return
+        self.private_api.load_items(self.to_load)
+        self.to_load = []
+        self.loaded = True
+        self.load_on_focus = False
+
+    def load_items(self, entries: typing.List[AbstractHistoryItem],
+                   lazy: bool = True) -> None:
+        """Add a list of AbstractHistoryItems to the tab's history.
+
+        Args:
+            entries: a list of AbstractHistoryItem
+            lazy: indicate if lazy history load
+        """
+        if lazy:
+            self.loaded = False
+            self.load_on_focus = True
+            self.to_load.extend(entries)
+        else:
+            self.private_api.load_items(entries)
+
+    def unload(self) -> None:
+        """Unload the history and store it in to_load."""
+        self.to_load = []
+        for item in self:
+            self.to_load.append(item)
+
+        self.loaded = False
+        self.load_on_focus = True
+        self._history.clear()
+
+    def _item_at(self, i: int) -> TypeHistoryItem:
+        return self._history.itemAt(i)
+
+    def _go_to_item(self, item: TypeHistoryItem) -> None:
+        self._tab.before_load_started.emit(item.url())
+        self._history.goToItem(item)
 
 
 class AbstractElements:
@@ -1069,6 +1181,34 @@ class AbstractTab(QWidget):
     def load_status(self) -> usertypes.LoadStatus:
         return self._load_status
 
+    def unload(self) -> None:
+        """Unload the tab."""
+        if not self.history.loaded:
+            return
+
+        self.history.unload()
+
+        try:
+            icon_url = self._widget.iconUrl().toDisplayString(
+                QUrl.EncodeUnicode
+            )
+        except AttributeError:
+            # QtWebkit doesn't have the iconUrl property
+            icon_url = ''
+
+        page_template = jinja.environment.from_string(
+            '<html><head>'
+            '{% if icon_url %}'
+            '<link rel="shortcut icon" href="{{icon_url}}"/>'
+            '{% endif %}'
+            '<title>{{title}}</title>'
+            '</head></html>'
+        )
+
+        self._widget.setHtml(
+            page_template.render(title=self.title(), icon_url=icon_url),
+            self._widget.url())
+
     def _load_url_prepare(self, url: QUrl, *,
                           emit_before_load_started: bool = True) -> None:
         qtutils.ensure_valid(url)
@@ -1133,6 +1273,18 @@ class AbstractTab(QWidget):
     def set_html(self, html: str, base_url: QUrl = QUrl()) -> None:
         raise NotImplementedError
 
+    def history_item_from_qt(self, item: TypeHistoryItem,
+                             active: bool = False) -> AbstractHistoryItem:
+        raise NotImplementedError
+
+    def new_history_item(
+            self, url: QUrl, original_url: QUrl,
+            title: str, active: bool,
+            user_data: typing.Dict[str, typing.Any]
+    ) -> AbstractHistoryItem:
+        """Create `AbstractHistoryItem` from history item data."""
+        raise NotImplementedError
+
     def __repr__(self) -> str:
         try:
             qurl = self.url()
@@ -1146,3 +1298,15 @@ class AbstractTab(QWidget):
     def is_deleted(self) -> bool:
         assert self._widget is not None
         return sip.isdeleted(self._widget)
+
+    def showEvent(self, event: QEvent) -> None:
+        """Load tab if unloaded.
+
+        Args:
+            event: QShowEvent
+        """
+        if event.spontaneous():
+            return
+
+        if self.history.load_on_focus:
+            self.history.load()
