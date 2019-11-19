@@ -45,10 +45,11 @@ class _Highlighter(QSyntaxHighlighter):
 
     def highlightBlock(self, text):
         """Override highlightBlock for custom highlighting."""
-        for match in re.finditer(self._pattern, text, re.IGNORECASE):
-            start, end = match.span()
-            length = end - start
-            self.setFormat(start, length, self._format)
+        for word in self._pattern.split():
+            index = text.casefold().find(word.casefold())
+            while index != -1:
+                self.setFormat(index, len(word), self._format)
+                index = text.find(word, index + len(word))
 
 
 class CompletionItemDelegate(QStyledItemDelegate):
@@ -226,12 +227,11 @@ class CompletionItemDelegate(QStyledItemDelegate):
             pattern = view.pattern
             columns_to_filter = index.model().columns_to_filter(index)
             if index.column() in columns_to_filter and pattern:
-                pat = re.escape(pattern).replace(r'\ ', r'|')
                 if self._opt.state & QStyle.State_Selected:
                     color = config.val.colors.completion.item.selected.match.fg
                 else:
                     color = config.val.colors.completion.match.fg
-                _Highlighter(self._doc, pat, color)
+                _Highlighter(self._doc, pattern, color)
             self._doc.setPlainText(self._opt.text)
         else:
             self._doc.setHtml(
