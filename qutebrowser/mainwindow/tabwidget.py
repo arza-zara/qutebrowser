@@ -777,9 +777,9 @@ class TabBar(QTabBar):
                 if not delta:
                     return
                 if delta.y() < 0:
-                    self.parent().scroll_tab_bar_right(1)
+                    self.parent().scroll_tab_bar_right(10)
                 else:
-                    self.parent().scroll_tab_bar_left(1)
+                    self.parent().scroll_tab_bar_left(10)
             else:
                 super().wheelEvent(e)
         else:
