@@ -606,6 +606,15 @@ class CommandDispatcher:
 
     @cmdutils.register(instance='command-dispatcher', scope='window')
     @cmdutils.argument('count', value=cmdutils.Value.count)
+    def scroll_tabbar(self, diff: int, *, count: int = 1) -> None:
+        tab = self._tabbed_browser.widget
+        if diff < 0:
+            tab.scroll_tab_bar_left(-count*diff)
+        else:
+            tab.scroll_tab_bar_right(count*diff)
+
+    @cmdutils.register(instance='command-dispatcher', scope='window')
+    @cmdutils.argument('count', value=cmdutils.Value.count)
     @cmdutils.argument('top_navigate', metavar='ACTION',
                        choices=('prev', 'decrement'))
     @cmdutils.argument('bottom_navigate', metavar='ACTION',
