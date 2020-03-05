@@ -1019,7 +1019,9 @@ class AbstractTab(QWidget):
 
         self.load_finished.emit(ok)
 
-        if not self.title():
+        if self.title():
+            self.title_changed.emit(self.title())
+        else:
             self.title_changed.emit(self.url().toDisplayString())
 
         self.zoom.reapply()
