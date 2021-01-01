@@ -359,7 +359,6 @@ class TabWidget(QTabWidget):
         start_idx = self.tabBar().tabAt(start)
         end_idx = self.tabBar().tabAt(end)
         if start_idx < 0 or end_idx < 0:
-            log.misc.warning("Could not get tabs at edges of tab bar.")
             return
 
         count = num_tabs - (end_idx - idx)
