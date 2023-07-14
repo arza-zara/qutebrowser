@@ -1328,7 +1328,7 @@ def test_url_completion_benchmark(benchmark, info,
 
     bookmark_manager_stub.marks = collections.OrderedDict([
         ('example.com/{}'.format(i), 'title{}'.format(i))
-        for i in range(1000)])
+        for i in range(100000)])
 
     def bench():
         model = urlmodel.url(info=info)
@@ -1336,9 +1336,16 @@ def test_url_completion_benchmark(benchmark, info,
         model.set_pattern('e')
         model.set_pattern('ex')
         model.set_pattern('ex ')
-        model.set_pattern('ex 1')
-        model.set_pattern('ex 12')
-        model.set_pattern('ex 123')
+        model.set_pattern('ex a')
+        model.set_pattern('ex am')
+        model.set_pattern('ex am p')
+        model.set_pattern('ex am pl')
+        model.set_pattern('ex am pl e')
+        model.set_pattern('ex am pl e 1')
+        model.set_pattern('ex am pl e 1 2')
+        model.set_pattern('ex am pl e 1 2 3')
+        model.set_pattern('ex am pl e 1 2 3')
+        model.set_pattern('ex am pl e 1 2 3 4')
 
     benchmark(bench)
 
