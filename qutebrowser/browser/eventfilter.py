@@ -164,8 +164,7 @@ class TabEventFilter(QObject):
             return True
 
         elif e.modifiers() & Qt.KeyboardModifier.ControlModifier:
-            if mode == usertypes.KeyMode.passthrough:
-                return False
+            return False
 
             divider = config.val.zoom.mouse_divider
             if divider == 0:
